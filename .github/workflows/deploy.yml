@@ -1,0 +1,49 @@
+name: deploy 
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: docker login
+      env: 
+        DOCKER_USER: ${{secrets.DOCKER_USER}}
+        DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
+      run: |
+           docker login -u $DOCKER_USER -p $DOCKER_PASSWORD          
+    - name: Build Docker image
+      run: docker build . --file Dockerfile --tag okpakolee/grid:nginx
+    - name:  Docker push
+      run: docker push okpakolee/grid:nginx
+ 
+  deploy_to_ec2:
+    name: Deploy to ec2
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Deploy to EC2 via SSH action
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.PORT }}
+          script: |
+
+            # Stop all running Docker Containers
+            sudo docker kill $(sudo docker ps -q)
+
+            # Pull the Docker Image 
+            sudo docker pull okpakolee/grid:nginx
+
+            # Run a new container from a new image
+            sudo docker run -p 80:80 okpakolee/grid:nginx &
+
+
+
+
